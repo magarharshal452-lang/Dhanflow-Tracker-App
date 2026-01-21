@@ -12,11 +12,162 @@
     <style>
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
         .animate-slide-up { animation: slideUp 0.3s ease-out; }
-        body { background-color: #f8fafc; font-family: sans-serif; }
+        body { background-color: #f8fafc; font-family: sans-serif; overflow-x: hidden; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
     </style>
 </head>
 <body>
     <div id="root"></div>
-    <script type="text/babel" src="app.js"></script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+        const { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, Tooltip } = Recharts;
+
+        function DhanFlowApp() {
+            const [screen, setScreen] = useState('splash');
+            const [activeTab, setActiveTab] = useState('Home');
+            const [showAdd, setShowAdd] = useState(false);
+            const [userName, setUserName] = useState(localStorage.getItem('df_name') || '');
+            const [transactions, setTransactions] = useState(JSON.parse(localStorage.getItem('df_tx')) || []);
+            const [accounts, setAccounts] = useState(JSON.parse(localStorage.getItem('df_acc')) || [
+                { id: 1, name: 'Cash', balance: 0 },
+                { id: 2, name: 'Bank', balance: 5000 }
+            ]);
+
+            useEffect(() => {
+                if (screen === 'splash') setTimeout(() => setScreen(userName ? 'main' : 'login'), 2000);
+                localStorage.setItem('df_tx', JSON.stringify(transactions));
+                localStorage.setItem('df_acc', JSON.stringify(accounts));
+            }, [transactions, accounts, userName, screen]);
+
+            const totals = useMemo(() => {
+                const income = transactions.filter(t => t.type === 'Income').reduce((a, b) => a + b.amount, 0);
+                const expense = transactions.filter(t => t.type === 'Expense').reduce((a, b) => a + b.amount, 0);
+                const balance = accounts.reduce((a, b) => a + b.balance, 0);
+                return { income, expense, balance };
+            }, [transactions, accounts]);
+
+            const addTx = (tx) => {
+                setTransactions([tx, ...transactions]);
+                setAccounts(accounts.map(acc => acc.name === tx.account ? 
+                    { ...acc, balance: tx.type === 'Income' ? acc.balance + tx.amount : acc.balance - tx.amount } : acc
+                ));
+            };
+
+            if (screen === 'splash') return (
+                <div className="h-screen bg-blue-600 flex flex-col items-center justify-center text-white">
+                    <h1 className="text-4xl font-black tracking-tighter">DhanFlow</h1>
+                    <div className="mt-4 w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
+                </div>
+            );
+
+            if (screen === 'login') return (
+                <div className="h-screen p-8 flex flex-col justify-center bg-white max-w-md mx-auto">
+                    <h2 className="text-3xl font-bold text-blue-900 mb-2">Welcome!</h2>
+                    <p className="text-gray-500 mb-8">Enter your name to start tracking.</p>
+                    <input id="nameInput" type="text" className="w-full p-4 bg-gray-100 rounded-2xl mb-4 border-2 border-transparent focus:border-blue-500 outline-none" placeholder="Your Name" />
+                    <button onClick={() => {
+                        const name = document.getElementById('nameInput').value;
+                        if(name) { setUserName(name); localStorage.setItem('df_name', name); setScreen('main'); }
+                    }} className="w-full bg-blue-600 text-white p-4 rounded-2xl font-bold shadow-lg shadow-blue-200">Enter DhanFlow</button>
+                </div>
+            );
+
+            return (
+                <div className="max-w-md mx-auto min-h-screen relative pb-24 bg-slate-50">
+                    {activeTab === 'Home' && (
+                        <div className="p-6 animate-slide-up">
+                            <h2 className="text-lg font-bold mb-4">Hello, {userName}! 👋</h2>
+                            <div className="bg-blue-600 p-8 rounded-[2.5rem] text-white shadow-xl shadow-blue-200 mb-8">
+                                <p className="opacity-70 text-sm">Total Balance</p>
+                                <h1 className="text-4xl font-bold mt-1">₹{totals.balance.toLocaleString()}</h1>
+                                <div className="flex gap-4 mt-6">
+                                    <div className="bg-white/10 p-3 rounded-2xl flex-1">
+                                        <p className="text-[10px] uppercase opacity-70">Income</p>
+                                        <p className="font-bold">₹{totals.income}</p>
+                                    </div>
+                                    <div className="bg-white/10 p-3 rounded-2xl flex-1">
+                                        <p className="text-[10px] uppercase opacity-70">Expense</p>
+                                        <p className="font-bold">₹{totals.expense}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <h3 className="font-bold mb-4 text-gray-800">Recent Activity</h3>
+                            <div className="space-y-3">
+                                {transactions.length === 0 ? <p className="text-gray-400 text-center py-10">No transactions yet.</p> : 
+                                    transactions.slice(0, 5).map(t => (
+                                        <div key={t.id} className="bg-white p-4 rounded-2xl flex justify-between items-center shadow-sm">
+                                            <div><p className="font-bold text-sm">{t.title}</p><p className="text-xs text-gray-400">{t.category}</p></div>
+                                            <p className={`font-bold ${t.type === 'Income' ? 'text-blue-600' : 'text-red-500'}`}>
+                                                {t.type === 'Income' ? '+' : '-'}₹{t.amount}
+                                            </p>
+                                        </div>
+                                    ))
+                                }
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'History' && (
+                        <div className="p-6 animate-slide-up">
+                            <h2 className="text-2xl font-bold mb-6">History</h2>
+                            <div className="space-y-3">
+                                {transactions.map(t => (
+                                    <div key={t.id} className="bg-white p-4 rounded-2xl flex justify-between shadow-sm">
+                                        <div><p className="font-bold">{t.title}</p><p className="text-xs text-gray-400">{t.date}</p></div>
+                                        <p className={t.type === 'Income' ? 'text-blue-600 font-bold' : 'text-red-500 font-bold'}>₹{t.amount}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t p-4 flex justify-around items-center max-w-md mx-auto z-40">
+                        {['Home', 'History'].map(t => (
+                            <button key={t} onClick={() => setActiveTab(t)} className={`flex flex-col items-center ${activeTab === t ? 'text-blue-600 font-bold' : 'text-gray-300'}`}>
+                                <span className="text-xs uppercase tracking-widest">{t}</span>
+                            </button>
+                        ))}
+                        <button onClick={() => {localStorage.clear(); window.location.reload();}} className="text-gray-300 text-xs uppercase tracking-widest">Reset</button>
+                    </nav>
+
+                    <button onClick={() => setShowAdd(true)} className="fixed bottom-24 right-6 w-14 h-14 bg-blue-600 text-white rounded-full text-3xl shadow-xl shadow-blue-200 z-50 flex items-center justify-center font-light">+</button>
+
+                    {showAdd && <AddForm accounts={accounts} onSave={addTx} onClose={() => setShowAdd(false)} />}
+                </div>
+            );
+        }
+
+        function AddForm({ accounts, onSave, onClose }) {
+            const [title, setTitle] = useState('');
+            const [amt, setAmt] = useState('');
+            const [type, setType] = useState('Expense');
+
+            return (
+                <div className="fixed inset-0 bg-black/40 flex items-end z-[60] p-4">
+                    <div className="bg-white w-full max-w-md mx-auto rounded-[2.5rem] p-8 animate-slide-up shadow-2xl">
+                        <h3 className="text-xl font-bold mb-6 text-blue-900">New Entry</h3>
+                        <input type="text" className="w-full p-4 bg-gray-100 rounded-2xl mb-3 outline-none" placeholder="What for?" value={title} onChange={e => setTitle(e.target.value)} />
+                        <input type="number" className="w-full p-4 bg-gray-100 rounded-2xl mb-3 outline-none text-xl font-bold" placeholder="Amount (₹)" value={amt} onChange={e => setAmt(e.target.value)} />
+                        <div className="flex gap-2 mb-6">
+                            {['Income', 'Expense'].map(t => (
+                                <button key={t} onClick={() => setType(t)} className={`flex-1 p-3 rounded-xl font-bold transition ${type === t ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}>{t}</button>
+                            ))}
+                        </div>
+                        <button onClick={() => {
+                            if(title && amt) {
+                                onSave({ id: Date.now(), title, amount: parseFloat(amt), type, category: 'General', account: 'Cash', date: new Date().toLocaleDateString() });
+                                onClose();
+                            }
+                        }} className="w-full bg-blue-600 text-white p-5 rounded-3xl font-bold text-lg shadow-lg shadow-blue-100">Save Transaction</button>
+                        <button onClick={onClose} className="w-full mt-4 text-gray-400 font-medium">Cancel</button>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<DhanFlowApp />);
+    </script>
 </body>
 </html>
